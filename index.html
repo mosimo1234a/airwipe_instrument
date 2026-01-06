@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Air Synth</title>
+    <style>
+        :root {
+            --toss-blue: #3182f6;
+            --toss-bg: #f2f4f6;
+            --gemini-grad: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --glass: rgba(255, 255, 255, 0.7);
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--toss-bg);
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+            touch-action: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            transition: background 0.5s;
+        }
+
+        /* 배경에 은은하게 퍼지는 제미나이 오라 */
+        #aura {
+            position: absolute;
+            width: 150vw;
+            height: 150vw;
+            background: radial-gradient(circle, rgba(79, 172, 254, 0.4) 0%, rgba(242, 244, 246, 0) 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            opacity: 0.6;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* 메인 UI 카드 (글래스모피즘) */
+        .card {
+            position: relative;
+            z-index: 10;
+            width: 85%;
+            max-width: 340px;
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 40px 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 800;
+            color: #191f28;
+            margin: 0 0 10px 0;
+            letter-spacing: -0.5px;
+        }
+
+        p {
+            font-size: 15px;
+            color: #8b95a1;
+            margin: 0 0 40px 0;
+            line-height: 1.5;
+        }
+
+        /* 시각화 원 (반응형) */
+        #visualizer {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: var(--gemini-grad);
+            margin: 0 auto 40px auto;
+            box-shadow: 0 10px 30px rgba(79, 172, 254, 0.4);
+            transform: scale(1);
+            transition: transform 0.1s;
+        }
+
+        /* 토스 스타일 버튼 */
+        #btn-start {
+            background: var(--toss-blue);
+            color: white;
+            border: none;
+            padding: 18px 0;
+            width: 100%;
+            border-radius: 16px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            box-shadow: 0 5px 15px rgba(49, 130, 246, 0.3);
+        }
+
+        #btn-start:active {
+            transform: scale(0.96);
+            background: #1b64da;
+        }
+
+        .data-display {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #8b95a1;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="aura"></div>
+
+    <div class="card">
+        <h1>Air Motion Synth</h1>
+        <p>폰을 공중에서 부드럽게 기울여보세요.<br>각도에 따라 소리의 결이 달라집니다.</p>
+
+        <div id="visualizer"></div>
+
+        <div class="data-display">
+            <span id="pitch-val">Pitch: --</span>
+            <span id="filter-val">Tone: --</span>
+        </div>
+
+        <button id="btn-start">연주 시작하기</button>
+    </div>
+
+    <script>
+        const btn = document.getElementById('btn-start');
+        const visualizer = document.getElementById('visualizer');
+        const aura = document.getElementById('aura');
+        const pitchLabel = document.getElementById('pitch-val');
+        const filterLabel = document.getElementById('filter-val');
+
+        let audioCtx, osc, filter, gainNode;
+        let isPlaying = false;
+
+        // 오디오 초기화 (부드러운 Sine 파형)
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            osc = audioCtx.createOscillator();
+            filter = audioCtx.createBiquadFilter();
+            gainNode = audioCtx.createGain();
+
+            osc.type = 'sine'; // 가장 맑고 부드러운 소리
+            filter.type = 'lowpass';
+            
+            osc.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            // 초기 볼륨은 0 (움직일 때만 소리 나게 하려면 조절 가능)
+            gainNode.gain.value = 0.5;
+            osc.start();
+        }
+
+        btn.addEventListener('click', () => {
+            if (!isPlaying) {
+                initAudio();
+                requestPermission();
+                btn.innerText = "연주 중 (기울여보세요)";
+                btn.style.background = "#191f28"; // 다크 모드 느낌으로 변경
+                isPlaying = true;
+                animate();
+            }
+        });
+
+        // iOS 13+ 권한 요청
+        function requestPermission() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        }
+
+        function handleOrientation(event) {
+            if (!audioCtx) return;
+
+            // Beta: 앞뒤 기울기 (-180 ~ 180) -> Pitch 조절
+            // Gamma: 좌우 기울기 (-90 ~ 90) -> Filter 조절
+            const pitchRaw = event.beta; 
+            const toneRaw = event.gamma;
+
+            // 값 보정
+            const pitch = Math.max(100, Math.min(800, 300 + pitchRaw * 5)); // 100Hz ~ 800Hz
+            const tone = Math.max(200, Math.min(2000, 500 + Math.abs(toneRaw) * 20)); // 필터 주파수
+
+            // 오디오 적용 (부드럽게 전이)
+            osc.frequency.setTargetAtTime(pitch, audioCtx.currentTime, 0.1);
+            filter.frequency.setTargetAtTime(tone, audioCtx.currentTime, 0.1);
+
+            // UI 업데이트
+            pitchLabel.innerText = `Pitch: ${Math.round(pitch)}Hz`;
+            filterLabel.innerText = `Tone: ${Math.round(tone)}`;
+
+            // 비주얼 업데이트 (Gemini 느낌의 유동적인 움직임)
+            const scale = 0.8 + (Math.abs(toneRaw) / 90);
+            visualizer.style.transform = `scale(${scale})`;
+            
+            // 색상 변화 (파랑 -> 보라/민트)
+            const hue = 200 + (pitchRaw / 2); 
+            visualizer.style.background = `linear-gradient(135deg, hsl(${hue}, 80%, 60%), #00f2fe)`;
+            
+            // 오라 이동
+            aura.style.transform = `translate(calc(-50% + ${toneRaw}px), calc(-50% + ${pitchRaw}px))`;
+        }
+
+        // 대기 상태 애니메이션 (숨쉬기)
+        function animate() {
+            if(!isPlaying) return;
+            // 추가적인 애니메이션 로직이 필요하면 여기에 작성
+            requestAnimationFrame(animate);
+        }
+
+    </script>
+</body>
+</html>
